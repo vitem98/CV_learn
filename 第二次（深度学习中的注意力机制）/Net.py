@@ -22,8 +22,8 @@ learning_rate = 1e-3
 batch_size = 64
 epochs = 10
 batchsize = 64
-phi = 0
-dataset = 0
+phi = 2
+dataset = 1
 
 #--------------------------------------------------------------------------------------------------------
 #    数据导入模块，用了torchvision的FashionMNIST数据集
@@ -96,7 +96,27 @@ class JeffNetwork(nn.Module):
         super(JeffNetwork, self).__init__()
         self.phi = phi
         self.dataset = dataset
-        self.block1 = BasicBlock(1, [8,16])
+        if dataset == 0:
+            self.block1 = BasicBlock(1, [8, 16])
+            # 全连接层输出模块,
+            self.Fc1 = nn.Sequential(
+                nn.Flatten(),
+                nn.Linear(28 * 28 * 16, 512),
+                nn.ReLU(),
+                nn.Linear(512, 10),
+            )
+        if dataset == 1:
+            self.conv1 = nn.Conv2d(3,16,kernel_size=1, stride=1, padding=0)
+            self.block1 = BasicBlock(16, [8, 16])
+            # 当选择汽车数据集时，在卷积层后面加个pooling操作，减少训练场数量
+            self.Fc2 = nn.Sequential(
+                nn.MaxPool2d(2, 2),
+                nn.Flatten(),
+                nn.Linear(56 * 56 * 16, 512),
+                nn.ReLU(),
+                nn.Linear(512, 10),
+            )
+
         self.block2 = BasicBlock(16, [8,16])
 
         #注意力机制模块
@@ -107,25 +127,11 @@ class JeffNetwork(nn.Module):
             self.sam1 = SpatialAttention(kernel_size=3)
             self.sam2 = SpatialAttention(kernel_size=3)
 
-        #全连接层输出模块,
-
-        self.Fc1 = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(28 * 28 * 16, 512),
-            nn.ReLU(),
-            nn.Linear(512, 10),
-        )
-        #当选择汽车数据集时，在卷积层后面加个pooling操作，减少训练场数量
-        self.Fc2 = nn.Sequential(
-            nn.MaxPool2d(2,2),
-            nn.Flatten(),
-            nn.Linear(56 * 56 * 16, 512),
-            nn.ReLU(),
-            nn.Linear(512, 10),
-        )
-
 
     def forward(self, x):
+        # 1*28*28-->16*28*28
+        if self.dataset == 1:
+            x = self.conv1(x)
         # 1*28*28-->16*28*28
         x = self.block1(x)
         #------------------
@@ -136,7 +142,6 @@ class JeffNetwork(nn.Module):
             x = self.senet1(x)
         if self.phi == 2:
             x = self.sam1(x)
-
         # 16*28*28-->16*28*28
         x = self.block2(x)
         #------------------
@@ -161,7 +166,7 @@ class JeffNetwork(nn.Module):
 #       loss初始化
 #       优化器初始化，一般用adam和sgd
 #----------------------------------
-model = JeffNetwork(phi=phi).to(device)
+model = JeffNetwork(phi=phi,dataset=dataset).to(device)
 loss_fn = nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
